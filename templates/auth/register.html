@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — VPN Prime{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-5 col-lg-4">
+    <div class="card bg-dark-subtle border-secondary shadow">
+      <div class="card-body p-4">
+        <h4 class="card-title text-center mb-4">
+          <i class="bi bi-shield-lock-fill text-primary me-2"></i>VPN Prime
+        </h4>
+        <h5 class="text-center mb-4 text-secondary">Создать аккаунт</h5>
+
+        {% if ref %}
+          <div class="alert alert-info py-2 small">
+            <i class="bi bi-person-plus me-1"></i>Вы регистрируетесь по реферальной ссылке
+          </div>
+        {% endif %}
+
+        <form method="post" action="/auth/register">
+          <input type="hidden" name="ref" value="{{ ref or '' }}">
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control bg-dark text-light border-secondary"
+                   placeholder="you@example.com" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Пароль</label>
+            <input type="password" name="password" id="password"
+                   class="form-control bg-dark text-light border-secondary"
+                   placeholder="Минимум 6 символов" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Подтверждение пароля</label>
+            <input type="password" name="password_confirm"
+                   class="form-control bg-dark text-light border-secondary"
+                   placeholder="Повторите пароль" required>
+          </div>
+          <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+          </div>
+        </form>
+
+        <hr class="border-secondary my-3">
+
+        <div class="text-center small">
+          Уже есть аккаунт?
+          <a href="/auth/login" class="text-primary text-decoration-none">Войти</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,168 @@
+/* VPN Prime Panel — Custom Styles */
+
+:root {
+  --primary: #4d9eff;
+  --bg-card: #1a1a2e;
+  --border: #2d2d44;
+}
+
+body {
+  min-height: 100vh;
+  background: #0f0f1a !important;
+}
+
+.bg-dark-subtle {
+  background-color: #1a1a2e !important;
+}
+
+.border-secondary {
+  border-color: #2d2d44 !important;
+}
+
+/* Cards */
+.card {
+  border-radius: 10px;
+}
+
+.card-header {
+  background: rgba(255, 255, 255, 0.03);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* Navbar */
+.navbar {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.navbar-brand {
+  font-size: 1.2rem;
+  letter-spacing: 0.5px;
+}
+
+/* Tables */
+.table-dark {
+  --bs-table-bg: transparent;
+  --bs-table-hover-bg: rgba(77, 158, 255, 0.05);
+}
+
+.table thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #2d2d44 !important;
+}
+
+.table td {
+  border-color: #1f1f35;
+  vertical-align: middle;
+}
+
+/* Protocol blocks */
+.protocol-block {
+  padding: 12px 0;
+}
+
+/* Monospace inputs */
+.font-monospace {
+  font-size: 0.85em;
+}
+
+/* Form controls */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 0.2rem rgba(77, 158, 255, 0.15) !important;
+}
+
+.form-control.bg-dark {
+  color: #e0e0e0;
+}
+
+/* Badges */
+.badge {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-primary:hover {
+  background: #3d8eef;
+  border-color: #3d8eef;
+}
+
+/* Alert auto-dismiss */
+.alert {
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+/* QR Modal */
+#qrImage {
+  border: 3px solid #fff;
+  border-radius: 8px;
+}
+
+/* Stats cards */
+.display-6 {
+  font-weight: 700;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d2d44;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4d9eff;
+}
+
+/* Copy success feedback */
+.copy-success {
+  animation: copyFade 0.5s ease;
+}
+
+@keyframes copyFade {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Pagination */
+.page-link {
+  background-color: #1a1a2e;
+  border-color: #2d2d44;
+  color: #e0e0e0;
+}
+.page-link:hover {
+  background-color: #2d2d44;
+  color: #fff;
+}
+.page-item.active .page-link {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Mobile tweaks */
+@media (max-width: 576px) {
+  .container-fluid {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .table-responsive {
+    font-size: 0.82rem;
+  }
+}

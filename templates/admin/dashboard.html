@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}
+  {% if view == 'audit' %}Журнал действий{% elif view == 'payments' %}Платежи{% elif view == 'servers' %}Серверы{% else %}Дашборд{% endif %} — VPN Prime Admin
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2">
+
+  {% if view == 'audit' %}
+    {# ======= AUDIT LOG VIEW ======= #}
+    <h5 class="mb-3"><i class="bi bi-journal-text me-2 text-info"></i>Журнал действий</h5>
+    <div class="card bg-dark-subtle border-secondary">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover table-sm mb-0">
+            <thead>
+              <tr class="text-secondary">
+                <th>Время</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in logs %}
+                <tr>
+                  <td class="small text-muted">{{ log.created_at.strftime('%d.%m %H:%M:%S') }}</td>
+                  <td class="small">{{ log.user_id or '—' }}</td>
+                  <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+                  <td class="small text-muted">{{ log.target_type or '' }} {{ log.target_id or '' }}</td>
+                  <td class="small text-muted font-monospace">{{ log.ip_address or '—' }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="text-center text-muted py-4">Журнал пуст</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% if total_pages > 1 %}
+      <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+          {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+              <a class="page-link bg-dark text-light border-secondary" href="?page={{ p }}">{{ p }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+    {% endif %}
+
+  {% elif view == 'payments' %}
+    {# ======= PAYMENTS VIEW ======= #}
+    <h5 class="mb-3"><i class="bi bi-credit-card me-2 text-success"></i>Платежи</h5>
+    <div class="card bg-dark-subtle border-secondary">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover table-sm mb-0">
+            <thead>
+              <tr class="text-secondary">
+                <th>#</th><th>Дата</th><th>Клиент</th><th>Сумма</th><th>Метод</th><th>Статус</th><th>Мес.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for pay in payments %}
+                <tr>
+                  <td class="small text-muted">{{ pay.id }}</td>
+                  <td class="small text-muted">{{ pay.created_at.strftime('%d.%m.%Y') }}</td>
+                  <td><a href="/admin/clients/{{ pay.client_id }}" class="text-decoration-none text-primary small">{{ pay.client_id }}</a></td>
+                  <td class="small">{{ (pay.amount / 100) | round(2) }} ₽</td>
+                  <td><span class="badge bg-secondary">{{ pay.method }}</span></td>
+                  <td>
+                    <span class="badge {% if pay.status == 'success' %}bg-success{% elif pay.status == 'pending' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                      {{ pay.status }}
+                    </span>
+                  </td>
+                  <td class="small">{{ pay.months }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Платежей нет</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% if total_pages > 1 %}
+      <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+          {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+              <a class="page-link bg-dark text-light border-secondary" href="?page={{ p }}">{{ p }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+    {% endif %}
+
+  {% elif view == 'servers' %}
+    {# ======= SERVERS VIEW ======= #}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0"><i class="bi bi-server me-2 text-primary"></i>Серверы</h5>
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addServerModal">
+        <i class="bi bi-plus-lg me-1"></i>Добавить сервер
+      </button>
+    </div>
+
+    <div class="row g-3">
+      {% for server in servers %}
+        <div class="col-md-6 col-lg-4">
+          <div class="card bg-dark-subtle border-secondary h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="card-title mb-0">{{ server.name }}</h6>
+                <span class="badge {% if server.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                  {{ 'Активен' if server.is_active else 'Отключён' }}
+                </span>
+              </div>
+              <div class="text-muted small mb-1"><i class="bi bi-hdd-network me-1"></i>{{ server.host }}</div>
+              <div class="text-muted small mb-1"><i class="bi bi-wifi me-1"></i>{{ server.awg_endpoint }}:{{ server.awg_port }}</div>
+              <div class="text-muted small mb-1"><i class="bi bi-diagram-3 me-1"></i>{{ server.awg_subnet }}</div>
+              <div class="text-muted small mb-3 font-monospace" style="word-break:break-all">
+                <small>{{ server.awg_public_key or 'Публичный ключ не задан' }}</small>
+              </div>
+              <div class="d-flex gap-2">
+                <form method="post" action="/admin/servers/{{ server.id }}/toggle">
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    {{ 'Отключить' if server.is_active else 'Включить' }}
+                  </button>
+                </form>
+                <form method="post" action="/admin/servers/{{ server.id }}/delete"
+                      onsubmit="return confirm('Удалить сервер {{ server.name }}?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="col-12 text-center text-muted py-5">
+          <i class="bi bi-server display-4 text-secondary mb-3"></i>
+          <div>Серверов нет. Добавьте первый сервер.</div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Add Server Modal -->
+    <div class="modal fade" id="addServerModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark border-secondary">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title">Добавить сервер</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <form method="post" action="/admin/servers">
+            <div class="modal-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Название</label>
+                  <input type="text" name="name" class="form-control bg-dark text-light border-secondary" placeholder="Основной NL" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Host / IP</label>
+                  <input type="text" name="host" class="form-control bg-dark text-light border-secondary" placeholder="213.176.16.95" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">AWG Interface</label>
+                  <input type="text" name="awg_interface" class="form-control bg-dark text-light border-secondary" value="awg0">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Config Path</label>
+                  <input type="text" name="awg_config_path" class="form-control bg-dark text-light border-secondary" value="/etc/amnezia/amneziawg/awg0.conf">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Endpoint (публичный IP/домен)</label>
+                  <input type="text" name="awg_endpoint" class="form-control bg-dark text-light border-secondary" placeholder="213.176.16.95" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">AWG Port</label>
+                  <input type="number" name="awg_port" class="form-control bg-dark text-light border-secondary" value="48336">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Подсеть</label>
+                  <input type="text" name="awg_subnet" class="form-control bg-dark text-light border-secondary" value="10.8.0.0/24">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Публичный ключ (AWG)</label>
+                  <input type="text" name="awg_public_key" class="form-control bg-dark text-light border-secondary font-monospace" placeholder="base64...">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Заметки</label>
+                  <textarea name="notes" class="form-control bg-dark text-light border-secondary" rows="2"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer border-secondary">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+              <button type="submit" class="btn btn-primary">Добавить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    {# ======= MAIN DASHBOARD ======= #}
+    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2 text-primary"></i>Дашборд</h5>
+
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card bg-dark-subtle border-secondary text-center h-100">
+          <div class="card-body">
+            <div class="display-6 text-primary">{{ total_clients }}</div>
+            <div class="text-muted small">Всего клиентов</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card bg-dark-subtle border-success text-center h-100">
+          <div class="card-body">
+            <div class="display-6 text-success">{{ active_clients }}</div>
+            <div class="text-muted small">Активных</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card bg-dark-subtle border-warning text-center h-100">
+          <div class="card-body">
+            <div class="display-6 text-warning">{{ expiring }}</div>
+            <div class="text-muted small">Истекают (3 дн.)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card bg-dark-subtle border-info text-center h-100">
+          <div class="card-body">
+            <div class="display-6 text-info">{{ total_revenue | int }} ₽</div>
+            <div class="text-muted small">Выручка</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="card bg-dark-subtle border-secondary">
+          <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-people me-2"></i>Последние клиенты</span>
+            <a href="/admin/clients" class="btn btn-sm btn-outline-primary">Все клиенты</a>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                  <tr class="text-secondary">
+                    <th>Имя</th><th>Тариф</th><th>Статус</th><th>Истекает</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for client in recent_clients %}
+                    <tr>
+                      <td><a href="/admin/clients/{{ client.id }}" class="text-decoration-none text-light">{{ client.name }}</a></td>
+                      <td>
+                        <span class="badge {% if client.plan == 'family' %}bg-warning text-dark{% elif client.plan == 'standard' %}bg-primary{% else %}bg-secondary{% endif %}">
+                          {{ client.plan }}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge {% if client.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                          {{ 'Активен' if client.is_active else 'Неактивен' }}
+                        </span>
+                      </td>
+                      <td class="small text-muted">
+                        {% if client.expires_at %}{{ client.expires_at.strftime('%d.%m.%Y') }}{% else %}—{% endif %}
+                      </td>
+                    </tr>
+                  {% else %}
+                    <tr><td colspan="4" class="text-center text-muted py-3">Нет клиентов</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card bg-dark-subtle border-secondary">
+          <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-journal-text me-2"></i>Последние события</span>
+            <a href="/admin/audit" class="btn btn-sm btn-outline-secondary">Журнал</a>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                  <tr class="text-secondary"><th>Время</th><th>Действие</th></tr>
+                </thead>
+                <tbody>
+                  {% for log in recent_logs %}
+                    <tr>
+                      <td class="small text-muted text-nowrap">{{ log.created_at.strftime('%d.%m %H:%M') }}</td>
+                      <td><span class="badge bg-secondary small">{{ log.action }}</span>
+                        {% if log.target_type %}<span class="text-muted small"> {{ log.target_type }} {{ log.target_id or '' }}</span>{% endif %}
+                      </td>
+                    </tr>
+                  {% else %}
+                    <tr><td colspan="2" class="text-center text-muted py-3">Нет событий</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card bg-dark-subtle border-secondary mt-3">
+          <div class="card-header border-secondary"><i class="bi bi-tools me-2"></i>Действия</div>
+          <div class="card-body d-grid gap-2">
+            <button class="btn btn-outline-secondary btn-sm" onclick="refreshStats()">
+              <i class="bi bi-arrow-clockwise me-1"></i>Обновить статистику AWG
+            </button>
+            <a href="/admin/clients" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-person-plus me-1"></i>Управление клиентами
+            </a>
+            <a href="/admin/servers" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-server me-1"></i>Управление серверами
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function refreshStats() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Обновление...';
+  try {
+    const r = await fetch('/admin/stats/refresh', {method: 'POST'});
+    const d = await r.json();
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Обновлено (' + d.peers_updated + ' peers)';
+  } catch(e) {
+    btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Ошибка';
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Обновить статистику AWG'; }, 3000);
+}
+</script>
+{% endblock %}
