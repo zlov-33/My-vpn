@@ -16,35 +16,51 @@ def generate_preshared_key() -> str:
     return subprocess.check_output(["wg", "genpsk"]).decode().strip()
 
 
-def add_peer(public_key: str, preshared_key: str, ip: str, interface: str = "awg0") -> bool:
+def add_peer(public_key: str, preshared_key: str, ip: str, interface: str = "wg0") -> bool:
     try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".psk", delete=False) as f:
-            f.write(preshared_key)
-            psk_file = f.name
+        # Write psk to a temp file inside the container via docker exec
+        # then use it, then remove it
+        psk_tmp = f"/tmp/psk_{public_key[:8]}.tmp"
+        subprocess.check_call(
+            ["docker", "exec", "amnezia-awg", "sh", "-c",
+             f"echo '{preshared_key}' > {psk_tmp}"]
+        )
         subprocess.check_call([
-            "awg", "set", interface, "peer", public_key,
-            "preshared-key", psk_file,
+            "docker", "exec", "amnezia-awg",
+            "wg", "set", interface, "peer", public_key,
+            "preshared-key", psk_tmp,
             "allowed-ips", ip
         ])
-        os.unlink(psk_file)
-        subprocess.check_call(["wg-quick", "save", interface])
+        subprocess.check_call(
+            ["docker", "exec", "amnezia-awg", "rm", "-f", psk_tmp]
+        )
+        subprocess.check_call(
+            ["docker", "exec", "amnezia-awg", "wg-quick", "save", interface]
+        )
         return True
     except Exception:
         return False
 
 
-def remove_peer(public_key: str, interface: str = "awg0") -> bool:
+def remove_peer(public_key: str, interface: str = "wg0") -> bool:
     try:
-        subprocess.check_call(["awg", "set", interface, "peer", public_key, "remove"])
-        subprocess.check_call(["wg-quick", "save", interface])
+        subprocess.check_call([
+            "docker", "exec", "amnezia-awg",
+            "wg", "set", interface, "peer", public_key, "remove"
+        ])
+        subprocess.check_call(
+            ["docker", "exec", "amnezia-awg", "wg-quick", "save", interface]
+        )
         return True
     except Exception:
         return False
 
 
-def get_peers_stats(interface: str = "awg0") -> dict:
+def get_peers_stats(interface: str = "wg0") -> dict:
     try:
-        output = subprocess.check_output(["awg", "show", interface, "dump"]).decode()
+        output = subprocess.check_output(
+            ["docker", "exec", "amnezia-awg", "wg", "show", interface, "dump"]
+        ).decode()
         peers = {}
         lines = output.strip().split("\n")
         for line in lines[1:]:  # skip server line
@@ -63,15 +79,30 @@ def get_peers_stats(interface: str = "awg0") -> dict:
 
 
 def get_server_params(config_path: str) -> dict:
+    """
+    Read AWG server config params.
+    If config_path starts with 'docker:', reads from inside the container:
+      e.g. 'docker:amnezia-awg:/opt/amnezia/awg/wg0.conf'
+    Otherwise reads from local filesystem.
+    """
     params = {}
     try:
-        with open(config_path) as f:
-            for line in f:
-                line = line.strip()
-                for key in ["Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4"]:
-                    if line.startswith(key + " = ") or line.startswith(key + "="):
-                        val = line.split("=", 1)[1].strip()
-                        params[key.lower()] = int(val)
+        if config_path.startswith("docker:"):
+            _, container, path = config_path.split(":", 2)
+            content = subprocess.check_output(
+                ["docker", "exec", container, "cat", path]
+            ).decode()
+            lines = content.splitlines()
+        else:
+            with open(config_path) as f:
+                lines = f.readlines()
+
+        for line in lines:
+            line = line.strip()
+            for key in ["Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4"]:
+                if line.startswith(key + " = ") or line.startswith(key + "="):
+                    val = line.split("=", 1)[1].strip()
+                    params[key.lower()] = int(val)
     except Exception:
         pass
     return params
