@@ -14,7 +14,7 @@
   <form method="get" action="/admin/clients" class="row g-2 mb-3 align-items-end">
     <div class="col-md-4">
       <input type="text" name="search" class="form-control form-control-sm bg-dark text-light border-secondary"
-             placeholder="Поиск по имени..." value="{{ search }}">
+             placeholder="Поиск по имени или username..." value="{{ search }}">
     </div>
     <div class="col-md-2">
       <select name="plan" class="form-select form-select-sm bg-dark text-light border-secondary">
@@ -49,8 +49,8 @@
               <th>#</th>
               <th>Имя</th>
               <th>Тариф</th>
+              <th>Трафик</th>
               <th>Статус</th>
-              <th>AWG устройства</th>
               <th>VLESS</th>
               <th>Истекает</th>
               <th class="text-end">Действия</th>
@@ -67,7 +67,8 @@
                     {{ client.name }}
                   </a>
                   {% if client.notes %}
-                    <i class="bi bi-chat-left-text-fill text-secondary ms-1" title="{{ client.notes }}" style="font-size:0.7rem"></i>
+                    <i class="bi bi-chat-left-text-fill text-secondary ms-1"
+                       title="{{ client.notes }}" style="font-size:0.7rem"></i>
                   {% endif %}
                 </td>
                 <td>
@@ -76,13 +77,22 @@
                   </span>
                 </td>
                 <td>
+                  {% if client.traffic_limit_gb > 0 %}
+                    <div style="min-width:80px;">
+                      <div class="progress mb-1" style="height:5px; background:#1e1e30;">
+                        <div class="progress-bar {% if client.traffic_percent >= 90 %}bg-danger{% elif client.traffic_percent >= 70 %}bg-warning{% else %}bg-primary{% endif %}"
+                             style="width:{{ client.traffic_percent }}%"></div>
+                      </div>
+                      <span class="small text-muted">{{ client.traffic_used_gb }}/{{ client.traffic_limit_gb }}ГБ</span>
+                    </div>
+                  {% else %}
+                    <span class="text-success small"><i class="bi bi-infinity"></i> {{ client.traffic_used_gb }}ГБ</span>
+                  {% endif %}
+                </td>
+                <td>
                   <span class="badge {% if client.is_active %}bg-success{% else %}bg-danger{% endif %}">
                     {{ 'Активен' if client.is_active else 'Неактивен' }}
                   </span>
-                </td>
-                <td>
-                  <span class="text-light">{{ item.devices | length }}</span>
-                  <span class="text-muted">/{{ client.awg_devices_limit }}</span>
                 </td>
                 <td>
                   {% if client.vless_username %}
@@ -144,9 +154,9 @@
           <div class="mb-3">
             <label class="form-label">Тариф</label>
             <select name="plan" class="form-select bg-dark text-light border-secondary">
-              <option value="lite">Lite — 1 AWG устройство</option>
-              <option value="standard" selected>Standard — 3 AWG устройства</option>
-              <option value="family">Family — 6 AWG устройств</option>
+              <option value="lite">Lite — 100 ГБ/мес</option>
+              <option value="standard" selected>Standard — 500 ГБ/мес</option>
+              <option value="family">Family — Безлимит</option>
             </select>
           </div>
           <div class="mb-3">
@@ -162,7 +172,7 @@
             <label class="form-label">Email пользователя (опционально)</label>
             <input type="email" name="user_email" class="form-control bg-dark text-light border-secondary"
                    placeholder="user@example.com">
-            <div class="form-text text-muted">Если указан — привязать к существующему аккаунту</div>
+            <div class="form-text text-muted">Привязать к существующему аккаунту</div>
           </div>
         </div>
         <div class="modal-footer border-secondary">

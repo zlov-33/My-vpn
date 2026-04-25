@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import (
-    String, Integer, Boolean, DateTime, Text, ForeignKey, BigInteger, Enum as SAEnum
+    String, Integer, Boolean, DateTime, Text, ForeignKey, BigInteger
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -36,16 +36,11 @@ class PaymentStatus(str, enum.Enum):
     refunded = "refunded"
 
 
-PLAN_LIMITS = {
-    Plan.lite: 1,
-    Plan.standard: 3,
-    Plan.family: 6,
-}
-
-PLAN_LIMITS_STR = {
-    "lite": 1,
-    "standard": 3,
-    "family": 6,
+# Traffic limits in GB per plan (0 = unlimited)
+PLAN_TRAFFIC_GB = {
+    "lite": 100,
+    "standard": 500,
+    "family": 0,
 }
 
 
@@ -71,24 +66,26 @@ class User(Base):
 
 
 class Server(Base):
+    """
+    VPN server node. Each server has its own VLESS API instance.
+    Credentials are stored encrypted (Fernet) in api_pass_encrypted.
+    """
     __tablename__ = "servers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    host: Mapped[str] = mapped_column(String(255), nullable=False)
-    awg_interface: Mapped[str] = mapped_column(String(32), default="awg0", nullable=False)
-    awg_config_path: Mapped[str] = mapped_column(String(512), nullable=False)
-    awg_endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
-    awg_port: Mapped[int] = mapped_column(Integer, default=48336, nullable=False)
-    awg_subnet: Mapped[str] = mapped_column(String(32), default="10.8.0.0/24", nullable=False)
-    awg_public_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str] = mapped_column(String(64), nullable=False)
+    location: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    api_url: Mapped[str] = mapped_column(String(512), nullable=False)          # http://127.0.0.1:8100
+    api_user: Mapped[str] = mapped_column(String(128), default="admin", nullable=False)
+    api_pass_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Fernet-encrypted
+    reality_sni: Mapped[str] = mapped_column(String(256), default="", nullable=False)  # e.g. max.ru
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)   # 0 = highest
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-
-    devices: Mapped[List["Device"]] = relationship("Device", back_populates="server")
 
 
 class Client(Base):
@@ -98,42 +95,44 @@ class Client(Base):
     user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     plan: Mapped[str] = mapped_column(String(32), default="standard", nullable=False)
-    awg_devices_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+
+    # Traffic
+    traffic_limit_gb: Mapped[int] = mapped_column(Integer, default=500, nullable=False)  # 0 = unlimited
+    traffic_used_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+
+    # VLESS subscription
+    vless_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True)
+    vless_sub_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True)
+
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    vless_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    vless_sub_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="clients")
-    devices: Mapped[List["Device"]] = relationship("Device", back_populates="client", cascade="all, delete-orphan")
     payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="client")
 
+    @property
+    def traffic_limit_bytes(self) -> int:
+        return self.traffic_limit_gb * 1024 ** 3
 
-class Device(Base):
-    __tablename__ = "devices"
+    @property
+    def traffic_used_gb(self) -> float:
+        return round(self.traffic_used_bytes / 1024 ** 3, 2)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    client_id: Mapped[int] = mapped_column(Integer, ForeignKey("clients.id"), nullable=False)
-    server_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("servers.id"), nullable=True)
-    device_name: Mapped[str] = mapped_column(String(128), default="Device", nullable=False)
-    public_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    private_key: Mapped[str] = mapped_column(String(64), nullable=False)
-    preshared_key: Mapped[str] = mapped_column(String(64), nullable=False)
-    ip_address: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    bytes_received: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    bytes_sent: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    last_handshake: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    @property
+    def traffic_percent(self) -> int:
+        if self.traffic_limit_gb == 0:
+            return 0
+        pct = int(self.traffic_used_bytes / self.traffic_limit_bytes * 100)
+        return min(pct, 100)
 
-    client: Mapped["Client"] = relationship("Client", back_populates="devices")
-    server: Mapped[Optional["Server"]] = relationship("Server", back_populates="devices")
+    @property
+    def sub_url(self) -> str:
+        from config import settings
+        return f"{settings.site_url}/sub/{self.vless_sub_token}" if self.vless_sub_token else ""
 
 
 class Payment(Base):
@@ -141,7 +140,7 @@ class Payment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     client_id: Mapped[int] = mapped_column(Integer, ForeignKey("clients.id"), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)  # in kopecks/cents
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)  # kopecks
     currency: Mapped[str] = mapped_column(String(8), default="RUB", nullable=False)
     method: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
