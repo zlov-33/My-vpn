@@ -80,6 +80,9 @@ async def run_migration(dry_run: bool):
             if "priority" not in server_cols:
                 await conn.execute(text("ALTER TABLE servers ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"))
                 logger.info("Added servers.priority")
+            if "min_plan" not in server_cols:
+                await conn.execute(text("ALTER TABLE servers ADD COLUMN min_plan VARCHAR(32) NOT NULL DEFAULT 'lite'"))
+                logger.info("Added servers.min_plan")
             if "ip" not in server_cols:
                 await conn.execute(text("ALTER TABLE servers ADD COLUMN ip VARCHAR(64) NOT NULL DEFAULT ''"))
                 logger.info("Added servers.ip")

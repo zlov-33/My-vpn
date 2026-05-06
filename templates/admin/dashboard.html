@@ -315,7 +315,7 @@
           <div class="card-header border-secondary"><i class="bi bi-tools me-2"></i>Действия</div>
           <div class="card-body d-grid gap-2">
             <button class="btn btn-outline-secondary btn-sm" onclick="refreshStats()">
-              <i class="bi bi-arrow-clockwise me-1"></i>Обновить статистику AWG
+              <i class="bi bi-arrow-clockwise me-1"></i>Синхронизировать трафик
             </button>
             <a href="/admin/clients" class="btn btn-outline-primary btn-sm">
               <i class="bi bi-person-plus me-1"></i>Управление клиентами
@@ -336,15 +336,22 @@
 async function refreshStats() {
   const btn = event.target;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Обновление...';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Синхронизация...';
   try {
     const r = await fetch('/admin/stats/refresh', {method: 'POST'});
     const d = await r.json();
-    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Обновлено (' + d.peers_updated + ' peers)';
+    if (d.status === 'ok') {
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Готово';
+    } else {
+      btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>' + (d.message || 'Ошибка');
+    }
   } catch(e) {
     btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Ошибка';
   }
-  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Обновить статистику AWG'; }, 3000);
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Синхронизировать трафик';
+  }, 3000);
 }
 </script>
 {% endblock %}

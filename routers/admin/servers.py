@@ -54,10 +54,14 @@ async def add_server(
     api_pass: str = Form(""),
     reality_sni: str = Form(""),
     priority: int = Form(0),
+    min_plan: str = Form("lite"),
     notes: str = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     admin = await require_admin(request, db)
+
+    if min_plan not in ("lite", "standard", "family"):
+        min_plan = "lite"
 
     server = Server(
         name=name,
@@ -68,6 +72,7 @@ async def add_server(
         api_pass_encrypted=encrypt(api_pass) if api_pass else "",
         reality_sni=reality_sni,
         priority=priority,
+        min_plan=min_plan,
         notes=notes,
         is_active=True,
     )
@@ -98,6 +103,7 @@ async def edit_server(
     api_pass: str = Form(None),
     reality_sni: str = Form(None),
     priority: int = Form(None),
+    min_plan: str = Form(None),
     notes: str = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -125,6 +131,8 @@ async def edit_server(
         server.reality_sni = reality_sni
     if priority is not None:
         server.priority = priority
+    if min_plan and min_plan in ("lite", "standard", "family"):
+        server.min_plan = min_plan
     if notes is not None:
         server.notes = notes
 

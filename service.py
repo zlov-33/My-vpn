@@ -31,12 +31,20 @@ def _get_vless_client(server: Server | None = None) -> VlessApiClient:
     )
 
 
-async def _get_active_servers(db) -> list[Server]:
+_PLAN_RANK = {"lite": 0, "standard": 1, "family": 2}
+
+
+async def _get_active_servers(db, plan: str | None = None) -> list[Server]:
+    """Return active servers. If plan is given, filter by min_plan access."""
     from sqlalchemy import select
     result = await db.execute(
         select(Server).where(Server.is_active == True).order_by(Server.priority)
     )
-    return result.scalars().all()
+    servers = result.scalars().all()
+    if plan is None:
+        return servers
+    client_rank = _PLAN_RANK.get(plan, 0)
+    return [s for s in servers if _PLAN_RANK.get(s.min_plan, 0) <= client_rank]
 
 
 async def create_client_full(
@@ -67,8 +75,8 @@ async def create_client_full(
     db.add(client)
     await db.flush()  # get client.id
 
-    # Create VLESS user on all active servers
-    servers = await _get_active_servers(db)
+    # Create VLESS user on servers accessible to this plan
+    servers = await _get_active_servers(db, plan=plan)
     if servers:
         for server in servers:
             vless = _get_vless_client(server)
@@ -112,7 +120,7 @@ async def create_client_full(
 
 async def deactivate_client(db, client: Client, admin_user_id: int | None = None):
     """Disable VLESS user on all servers and mark client inactive."""
-    servers = await _get_active_servers(db)
+    servers = await _get_active_servers(db, plan=client.plan)
     if client.vless_username:
         targets = servers if servers else [None]
         for server in targets:
@@ -137,7 +145,7 @@ async def deactivate_client(db, client: Client, admin_user_id: int | None = None
 
 async def activate_client(db, client: Client, admin_user_id: int | None = None):
     """Enable VLESS user on all servers and mark client active."""
-    servers = await _get_active_servers(db)
+    servers = await _get_active_servers(db, plan=client.plan)
     if client.vless_username:
         targets = servers if servers else [None]
         for server in targets:
@@ -180,7 +188,7 @@ async def extend_client(
     if reset_traffic:
         client.traffic_used_bytes = 0
 
-    servers = await _get_active_servers(db)
+    servers = await _get_active_servers(db, plan=client.plan)
     targets = servers if servers else [None]
 
     for server in targets:
@@ -211,7 +219,7 @@ async def reset_client_traffic(db, client: Client, admin_user_id: int | None = N
     """Reset traffic counter in DB and on all VLESS servers."""
     client.traffic_used_bytes = 0
 
-    servers = await _get_active_servers(db)
+    servers = await _get_active_servers(db, plan=client.plan)
     targets = servers if servers else [None]
     if client.vless_username:
         for server in targets:
@@ -242,7 +250,7 @@ async def change_client_plan(
     new_limit_gb = PLAN_TRAFFIC_GB.get(new_plan, 500)
     client.traffic_limit_gb = new_limit_gb
 
-    servers = await _get_active_servers(db)
+    servers = await _get_active_servers(db, plan=new_plan)
     targets = servers if servers else [None]
     if client.vless_username:
         for server in targets:

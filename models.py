@@ -81,6 +81,8 @@ class Server(Base):
     api_pass_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Fernet-encrypted
     reality_sni: Mapped[str] = mapped_column(String(256), default="", nullable=False)  # e.g. max.ru
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)   # 0 = highest
+    # Minimum plan required to access this server: "lite" | "standard" | "family"
+    min_plan: Mapped[str] = mapped_column(String(32), default="lite", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

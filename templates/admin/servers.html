@@ -37,12 +37,15 @@
               <i class="bi bi-link me-1"></i>{{ server.api_url }}
             </div>
             {% if server.reality_sni %}
-              <div class="text-muted small mb-3">
+              <div class="text-muted small mb-1">
                 <i class="bi bi-shield-check me-1 text-info"></i>SNI: <code class="text-info">{{ server.reality_sni }}</code>
               </div>
-            {% else %}
-              <div class="mb-3"></div>
             {% endif %}
+            <div class="mb-3">
+              <span class="badge {% if server.min_plan == 'family' %}bg-warning text-dark{% elif server.min_plan == 'standard' %}bg-primary{% else %}bg-success{% endif %}" title="Минимальный тариф для доступа">
+                <i class="bi bi-shield-lock me-1"></i>от {{ server.min_plan | capitalize }}
+              </span>
+            </div>
 
             <div class="d-flex gap-2 flex-wrap">
               <form method="post" action="/admin/servers/{{ server.id }}/check">
@@ -117,10 +120,18 @@
                     <input type="password" name="api_pass" class="form-control bg-dark text-light border-secondary"
                            placeholder="Оставьте пустым, чтобы не менять">
                   </div>
-                  <div class="col-md-12">
+                  <div class="col-md-8">
                     <label class="form-label">Reality SNI <span class="text-muted small">(сайт-мишень)</span></label>
                     <input type="text" name="reality_sni" class="form-control bg-dark text-light border-secondary"
                            value="{{ server.reality_sni }}" placeholder="max.ru">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Минимальный тариф</label>
+                    <select name="min_plan" class="form-select bg-dark text-light border-secondary">
+                      <option value="lite" {% if server.min_plan == 'lite' %}selected{% endif %}>Lite (все)</option>
+                      <option value="standard" {% if server.min_plan == 'standard' %}selected{% endif %}>Standard+</option>
+                      <option value="family" {% if server.min_plan == 'family' %}selected{% endif %}>Family only</option>
+                    </select>
                   </div>
                   <div class="col-12">
                     <label class="form-label">Заметки</label>
@@ -195,11 +206,20 @@
               <input type="password" name="api_pass" class="form-control bg-dark text-light border-secondary"
                      placeholder="Пароль от VLESS API">
             </div>
-            <div class="col-12">
+            <div class="col-md-8">
               <label class="form-label">Reality SNI</label>
               <input type="text" name="reality_sni" class="form-control bg-dark text-light border-secondary"
                      placeholder="max.ru">
-              <div class="form-text text-muted">Домен-мишень Reality (используется для блокировки в routing rules)</div>
+              <div class="form-text text-muted">Домен-мишень Reality (блокируется в routing rules)</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Минимальный тариф</label>
+              <select name="min_plan" class="form-select bg-dark text-light border-secondary">
+                <option value="lite" selected>Lite (доступен всем)</option>
+                <option value="standard">Standard и выше</option>
+                <option value="family">Только Family</option>
+              </select>
+              <div class="form-text text-muted">Клиенты ниже этого тарифа не получат этот сервер в подписке</div>
             </div>
             <div class="col-12">
               <label class="form-label">Заметки</label>

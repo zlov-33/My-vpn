@@ -257,14 +257,26 @@ def build_clash_config(vless_links: list[str]) -> str:
     return "\n".join(lines)
 
 
+_PLAN_RANK = {"lite": 0, "standard": 1, "family": 2}
+
+
+def _servers_for_plan(servers: list, plan: str) -> list:
+    """Filter servers by min_plan access level."""
+    client_rank = _PLAN_RANK.get(plan, 0)
+    return [
+        s for s in servers
+        if s.is_active and _PLAN_RANK.get(getattr(s, "min_plan", "lite"), 0) <= client_rank
+    ]
+
+
 async def build_user_subscription(
     client,
     servers: list,
     fmt: str = "json",
 ) -> tuple[bytes | str, str]:
     """
-    Collect VLESS links from all active servers for the client,
-    build subscription in the requested format.
+    Collect VLESS links from all servers accessible for the client's plan,
+    combine into subscription in the requested format.
 
     Returns (content, media_type).
     """
@@ -274,8 +286,14 @@ async def build_user_subscription(
     all_links: list[str] = []
     sni_list: list[str] = []
 
-    for server in servers:
-        if not server.is_active or not client.vless_username:
+    accessible = _servers_for_plan(servers, getattr(client, "plan", "lite"))
+    logger.debug(
+        f"Subscription for {client.vless_username} plan={client.plan}: "
+        f"{len(accessible)}/{len(servers)} servers accessible"
+    )
+
+    for server in accessible:
+        if not client.vless_username:
             continue
         api_pass = decrypt(server.api_pass_encrypted or "")
         vless = VlessApiClient(server.api_url, server.api_user, api_pass)
@@ -284,6 +302,7 @@ async def build_user_subscription(
             all_links.extend(links)
             if server.reality_sni:
                 sni_list.append(server.reality_sni)
+            logger.debug(f"  {server.name}: {len(links)} links")
         except Exception as e:
             logger.warning(f"Server {server.name}: failed to get links: {e}")
 
