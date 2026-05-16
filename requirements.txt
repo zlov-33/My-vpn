@@ -11,3 +11,4 @@ python-dotenv==1.0.1
 itsdangerous==2.2.0
 passlib[bcrypt]==1.7.4
 pydantic-settings==2.5.2
+cryptography>=42.0.0

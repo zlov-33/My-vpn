@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from database import get_db
-from models import Payment, Client, Device
-import awg
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import telegram
 from config import settings
+from database import get_db
+from models import Client, Payment, User
 from vless_api import VlessApiClient
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/webhook", tags=["webhook"])
 
 
 async def _activate_client_after_payment(db: AsyncSession, payment: Payment):
-    """Activate client subscription after successful payment."""
+    """Extend subscription + re-enable VLESS user after successful payment."""
     c_result = await db.execute(select(Client).where(Client.id == payment.client_id))
     client = c_result.scalar_one_or_none()
     if not client:
@@ -37,7 +39,6 @@ async def _activate_client_after_payment(db: AsyncSession, payment: Payment):
     client.expires_at = base + timedelta(days=payment.months * 30)
     client.is_active = True
 
-    # Enable VLESS user
     if client.vless_username:
         try:
             vless = VlessApiClient(
@@ -50,14 +51,6 @@ async def _activate_client_after_payment(db: AsyncSession, payment: Payment):
         except Exception as e:
             logger.warning(f"VLESS API update failed: {e}")
 
-    # Re-add AWG peers
-    dev_result = await db.execute(select(Device).where(Device.client_id == client.id))
-    devices = dev_result.scalars().all()
-    for device in devices:
-        awg.add_peer(
-            device.public_key, device.preshared_key, device.ip_address, settings.awg_interface
-        )
-
     await telegram.notify_admin(
         f"💰 Оплата получена: клиент {client.name}, метод {payment.method}, "
         f"+{payment.months} мес. (сумма: {payment.amount / 100:.2f} руб.)"
@@ -69,16 +62,12 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Handle payment webhooks from YooKassa and Robokassa.
 
-    YooKassa sends JSON with:
-      {"type": "notification", "object": {"id": ..., "status": "succeeded", "amount": {...}, "metadata": {...}}}
-
-    Robokassa sends form-encoded with:
-      OutSum, InvId, SignatureValue, etc.
+    YooKassa: JSON {type: "notification", object: {id, status, amount, metadata}}
+    Robokassa: form-urlencoded OutSum/InvId/SignatureValue
     """
     content_type = request.headers.get("content-type", "")
 
     if "application/json" in content_type:
-        # YooKassa format
         try:
             data = await request.json()
         except Exception:
@@ -95,7 +84,6 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             amount_value = obj.get("amount", {}).get("value", "0")
             amount_kopecks = int(float(amount_value) * 100)
 
-            # Find existing pending payment or create new
             pay_result = await db.execute(
                 select(Payment).where(Payment.external_id == external_id)
             )
@@ -137,7 +125,6 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return JSONResponse({"status": "ignored"})
 
     elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
-        # Robokassa format
         try:
             form = await request.form()
         except Exception:
@@ -145,10 +132,6 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
         out_sum = form.get("OutSum", "0")
         inv_id = form.get("InvId", "0")
-        signature = form.get("SignatureValue", "")
-
-        # In production, verify signature here
-        # For now just log and process
         logger.info(f"Robokassa webhook: InvId={inv_id}, OutSum={out_sum}")
 
         pay_result = await db.execute(
@@ -169,7 +152,7 @@ async def payment_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/telegram")
 async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db)):
-    """Handle Telegram bot webhook messages for /link command."""
+    """Handle Telegram bot webhook for /link command."""
     try:
         data = await request.json()
     except Exception:
@@ -182,18 +165,20 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
     if text.startswith("/link "):
         code = text.split(" ", 1)[1].strip()
         u_result = await db.execute(
-            select(__import__("models").User).where(
-                __import__("models").User.telegram_link_code == code
-            )
+            select(User).where(User.telegram_link_code == code)
         )
         user = u_result.scalar_one_or_none()
         if user:
             user.telegram_id = chat_id
             user.telegram_link_code = None
             await db.commit()
-            await telegram.send_message(chat_id, "✅ Telegram успешно привязан к вашему аккаунту VPN Prime!")
+            await telegram.send_message(
+                chat_id, "✅ Telegram успешно привязан к вашему аккаунту VPN Prime!"
+            )
         else:
-            await telegram.send_message(chat_id, "❌ Код не найден или устарел. Получите новый в личном кабинете.")
+            await telegram.send_message(
+                chat_id, "❌ Код не найден или устарел. Получите новый в личном кабинете."
+            )
 
     elif text == "/start":
         await telegram.send_message(
